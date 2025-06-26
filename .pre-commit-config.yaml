@@ -1,0 +1,232 @@
+# Pre-commit configuration for AI Data Collection Toolkit
+# See https://pre-commit.com for more information
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: debug-statements
+      - id: detect-private-key
+      - id: fix-byte-order-marker
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: requirements-txt-fixer
+
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ['--line-length=88']
+
+  # Import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ['--profile=black', '--line-length=88']
+
+  # Python linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args:
+          - '--max-line-length=88'
+          - '--extend-ignore=E203,W503,E501'
+          - '--exclude=.git,__pycache__,build,dist,.venv,venv'
+        additional_dependencies:
+          - flake8-bugbear
+          - flake8-comprehensions
+          - flake8-simplify
+
+  # Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+          - types-toml
+        args:
+          - '--ignore-missing-imports'
+          - '--disallow-untyped-defs'
+          - '--no-implicit-optional'
+        exclude: '^(tests/|examples/|docs/)'
+
+  # Security linting
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['-r', 'ai_data_collector/']
+        exclude: 'tests/'
+
+  # Dependency security check
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.2
+    hooks:
+      - id: python-safety-dependencies-check
+        files: requirements.*\.txt$
+
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: ['--ignore=DL3008', '--ignore=DL3009']
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.5
+    hooks:
+      - id: shellcheck
+        args: ['-e', 'SC1091']  # Ignore sourcing non-constant files
+
+  # YAML formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.0.3
+    hooks:
+      - id: prettier
+        types_or: [yaml, markdown]
+        exclude: '^(CHANGELOG\.md|.*\.ya?ml)$'
+
+  # Python docstring formatting
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        args:
+          - '--convention=google'
+          - '--add-ignore=D100,D104,D105,D107,D200,D212,D415'
+        exclude: '^(tests/|examples/|setup\.py)'
+
+  # Remove unused imports
+  - repo: https://github.com/pycqa/autoflake
+    rev: v2.2.0
+    hooks:
+      - id: autoflake
+        args:
+          - '--in-place'
+          - '--remove-all-unused-imports'
+          - '--remove-unused-variables'
+          - '--remove-duplicate-keys'
+          - '--expand-star-imports'
+
+  # Upgrade Python syntax
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.10.1
+    hooks:
+      - id: pyupgrade
+        args: ['--py38-plus']
+
+  # Check for common Python mistakes
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+      - id: python-check-blanket-type-ignore
+      - id: python-no-log-warn
+      - id: python-use-type-annotations
+      - id: rst-backticks
+      - id: rst-directive-colons
+      - id: rst-inline-touching-normal
+
+  # Local hooks for custom checks
+  - repo: local
+    hooks:
+      # Check for debugging statements
+      - id: check-debug-statements
+        name: Check for debugging statements
+        entry: bash -c 'if grep -r "import pdb\|pdb\.set_trace\|breakpoint()" ai_data_collector/; then echo "Debug statements found!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      # Check for TODO/FIXME comments in main code
+      - id: check-todos
+        name: Check for TODO/FIXME in main code
+        entry: bash -c 'if grep -r "TODO\|FIXME" ai_data_collector/ --exclude-dir=tests; then echo "TODO/FIXME found in main code!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      # Ensure all Python files have proper encoding declaration
+      - id: check-python-encoding
+        name: Check Python file encoding
+        entry: bash -c 'for file in $(find ai_data_collector/ -name "*.py"); do if ! head -2 "$file" | grep -q "coding[:=]\\s*utf-8"; then echo "Missing UTF-8 encoding in $file"; exit 1; fi; done'
+        language: system
+        pass_filenames: false
+
+      # Check that version numbers are consistent
+      - id: check-version-consistency
+        name: Check version consistency
+        entry: python scripts/check_version_consistency.py
+        language: system
+        files: '^(ai_data_collector/__init__\.py|pyproject\.toml|setup\.py)$'
+        pass_filenames: false
+
+      # Run basic import tests
+      - id: test-imports
+        name: Test package imports
+        entry: python -c "import ai_data_collector; print('✓ Package imports successfully')"
+        language: system
+        pass_filenames: false
+
+# Configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
+
+# Default settings
+default_language_version:
+  python: python3.11
+
+default_stages: [commit, push]
+
+minimum_pre_commit_version: '3.0.0'
+
+# Exclude patterns
+exclude: |
+  (?x)^(
+      \.git/.*|
+      \.venv/.*|
+      venv/.*|
+      build/.*|
+      dist/.*|
+      \.tox/.*|
+      __pycache__/.*|
+      \.pytest_cache/.*|
+      \.mypy_cache/.*|
+      \.coverage.*|
+      htmlcov/.*|
+      \.eggs/.*|
+      .*\.egg-info/.*|
+      node_modules/.*|
+      \.DS_Store|
+      Thumbs\.db
+  )$
